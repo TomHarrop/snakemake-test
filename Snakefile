@@ -26,7 +26,7 @@ rule generate_trinotate_db:
     output:
         trinotate_db
     shell:
-        'cp "$(readlink -f {input})" {output}'
+        'cp {input} {output}'
 
 rule transdecoder:
     input:
