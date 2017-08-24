@@ -5,7 +5,7 @@ import os
 
 # functions
 def extract_sample_name(fastq_file):
-    sample_re = r'^(?P<SN>L\d+)_.*'
+    sample_re = r'^(?P<SN>.*L\d+)_.*'
     sn = re.sub(sample_re,
         r'\g<SN>',
         os.path.basename(fastq_file))
@@ -29,7 +29,7 @@ batch = ['001']
 
 # rules
 wildcard_constraints:
-    sample = 'L\d+',
+    sample = '.*L\d+',
     read = 'R\d',
     batch = '\d+'
 
