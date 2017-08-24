@@ -1,1 +1,93 @@
-/Users/tom/Projects/sm-rna-test/Snakefile
+#!/usr/bin/env python3
+
+import re
+import os
+
+# functions
+def extract_sample_name(fastq_file):
+    sample_re = r'^(?P<SN>L\d+)_.*'
+    sn = re.sub(sample_re,
+        r'\g<SN>',
+        os.path.basename(fastq_file))
+    return sn
+
+# generate list of sample names
+data_files = [(dirpath, filenames) for (dirpath, dirnames, filenames)
+              in os.walk('data')]
+fastq_files = []
+for dirpath, filenames in data_files:
+    for filename in filenames:
+        if 'fastq.gz' in filename:
+            fastq_files.append(os.path.join(dirpath, filename))
+
+# globals
+mapping_ref = 'data/ref'
+adaptors = 'bin/bbmap/resources/adapters.fa'
+sample = list(set(extract_sample_name(x) for x in fastq_files))
+read = ['R1', 'R2']
+batch = ['001']
+
+# rules
+wildcard_constraints:
+    sample = 'L\d+',
+    read = 'R\d',
+    batch = '\d+'
+
+rule all:
+    input:
+        expand('output/star/{sample}.Aligned.sortedByCoord.out.bam',
+            sample = sample)
+
+rule bbduk:
+    input:
+        adaptors = adaptors,
+        r1 = expand('data/{{sample}}_R1_{batch}.fastq.gz', batch = batch),
+        r2 = expand('data/{{sample}}_R2_{batch}.fastq.gz', batch = batch)
+    output:
+        r1 = touch('output/bbduk/{sample}_R1.fastq.gz'),
+        r2 = touch('output/bbduk/{sample}_R2.fastq.gz')
+    shell:
+        'echo "'
+        'bbduk.sh -Xmx20g '
+        'in1={input.r1} '
+        'in2={input.r2} '
+        'out=stdout.fq '
+        'ref={input.adaptors} '
+        'threads=4 '
+        'k=20 '
+        'mink=10 '
+        'hdist=2 '
+        'hdist2=1 '
+        'ktrim=n '
+        'qtrim=r '
+        'maxns=0 '
+        'maxbadkmers=0 '
+        'minlength=35 '
+        'trimq=14 '
+        'tbo tpe '
+        '| bbduk.sh '
+        'in=stdin.fq '
+        'int=t '
+        'out1={output.r1} '
+        'out2={output.r2} '
+        'minlength=35 '
+        'qtrim=r '
+        'trimq=15 '
+        'minavgquality=15"'
+
+rule star:
+    input:
+        fq = expand('output/bbduk/{{sample}}_{read}.fastq.gz',
+            read = read),
+        mapping_ref = mapping_ref
+    output:
+        touch('output/star/{sample}.Aligned.sortedByCoord.out.bam')
+    shell:
+        'echo '
+        'STAR --genomeDir {input.mapping_ref} '
+        '--readFilesIn {input.fq} '
+        '--outSAMtype BAM SortedByCoordinate '
+        '--twopassMode Basic '
+        '--runThreadN 6 '
+        '--outFileNamePrefix {wildcards.sample}.'
+
